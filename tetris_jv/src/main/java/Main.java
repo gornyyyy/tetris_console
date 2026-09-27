@@ -3,12 +3,14 @@ import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.NonBlockingReader;
 import org.jline.utils.InfoCmp;
+import java.util.prefs.Preferences;
 
 public class Main {
 
     int rows = 20;
     int col = 10;
     int score = 0;
+    int bestScore = 0;
     int rowCount = 0;
     int level = 1;
     int currentType;
@@ -22,6 +24,8 @@ public class Main {
 
     Terminal terminal;
     NonBlockingReader reader;
+
+    private static final Preferences PREFS = Preferences.userNodeForPackage(Main.class);
 
     private static final String RESET = "\u001B[0m";
     private static final String GREEN = "\u001B[32m";
@@ -71,6 +75,13 @@ public class Main {
             }
     };
 
+    int LoadBestScore() {
+        return PREFS.getInt("bestScore", 0);
+    }
+
+    void SaveBestScore(int score) {
+        PREFS.putInt("bestScore", score);
+    }
 
     void FillBoard(int[][] board) {
         for (int i = 0; i < col; i++) {
@@ -485,17 +496,24 @@ public class Main {
             terminal.puts(InfoCmp.Capability.cursor_invisible);
             reader = terminal.reader();
 
+            bestScore = LoadBestScore();
+
             while (true) {
                 ResetGame();
                 GameCycle();
 
-                // Показать меню
+                if (score > bestScore) {
+                    bestScore = score;
+                    SaveBestScore(bestScore);
+                }
+
                 System.out.print("\033[H\033[2J");
                 System.out.println();
                 System.out.println("  ╔══════════════════════════╗");
                 System.out.println("  ║       GAME OVER          ║");
                 System.out.println("  ╠══════════════════════════╣");
                 System.out.println("  ║  Score: " + String.format("%-16s", score) + "║");
+                System.out.println("  ║  Best:  " + String.format("%-16s", bestScore) + "║");
                 System.out.println("  ║  Level: " + String.format("%-16s", level) + "║");
                 System.out.println("  ║  Lines: " + String.format("%-16s", rowCount) + "║");
                 System.out.println("  ╠══════════════════════════╣");
