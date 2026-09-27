@@ -17,6 +17,9 @@ public class Main {
     int[][] gameboard = new int[rows][col];
     // 3 - это низ, 2 - приземлившаяся фигурка, 1 - летящая фигурка
 
+    long drop_interval = 500;
+    long frame_interval = 15;
+
     Terminal terminal;
     NonBlockingReader reader;
 
@@ -273,8 +276,6 @@ public class Main {
                 MoveDown(gameboard);
             } else if (inputChar == 'r' || inputChar == 'к') {
                 Rotate(gameboard);
-            } else if (inputChar == 'q' || inputChar == 'й') {
-                System.exit(0);
             }
         }
         catch (Exception e) {
@@ -419,6 +420,64 @@ public class Main {
         return delRows;
     }
 
+    void ResetGame() {
+        score = 0;
+        level = 1;
+        rowCount = 0;
+        drop_interval = 500;
+        gameboard = new int[rows][col];
+        nextType = 0;
+        currentType = 0;
+    }
+
+    void GameCycle() throws InterruptedException {
+        int lastScore = -1;
+        long lastDropTime = System.currentTimeMillis();
+
+        System.out.print("\033[H\033[2J");
+        FillBoard(gameboard);
+
+        while (true) {
+            long now = System.currentTimeMillis();
+
+            if (score != lastScore) {
+                DrawScore(score, level);
+                lastScore = score;
+            }
+
+            DrawBoard(gameboard);
+            HandleInput();
+
+            if (now - lastDropTime >= drop_interval) {
+                MoveDown(gameboard);
+
+                int delRowCount = DelRow(gameboard);
+                rowCount += delRowCount;
+                switch (delRowCount) {
+                    case 1 -> score += 100 * level;
+                    case 2 -> score += 300 * level;
+                    case 3 -> score += 500 * level;
+                    case 4 -> score += 800 * level;
+                }
+
+                level = 1 + rowCount / 10;
+                drop_interval = Math.max(100, 500 - (level - 1) * 50);
+
+                if (IsBoardFree(gameboard)) {
+                    SpawnBlock(gameboard);
+                }
+
+                if (IsLose(gameboard)) {
+                    return;   // ← выход из цикла при проигрыше
+                }
+
+                lastDropTime = now;
+            }
+
+            Thread.sleep(frame_interval);
+        }
+    }
+
     void StartGame() {
         try {
             terminal = TerminalBuilder.builder().system(true).build();
@@ -426,58 +485,45 @@ public class Main {
             terminal.puts(InfoCmp.Capability.cursor_invisible);
             reader = terminal.reader();
 
-            long drop_interval = 500;
-            long frame_interval = 15;
-
-            int lastScore = -1;
-            long lastDropTime = System.currentTimeMillis();
-
-            System.out.print("\033[H\033[2J");
-            FillBoard(gameboard);
             while (true) {
-                long now = System.currentTimeMillis();
+                ResetGame();
+                GameCycle();
 
-                if (score != lastScore) {
-                    DrawScore(score, level);
-                    lastScore = score;
+                // Показать меню
+                System.out.print("\033[H\033[2J");
+                System.out.println();
+                System.out.println("  ╔══════════════════════════╗");
+                System.out.println("  ║       GAME OVER          ║");
+                System.out.println("  ╠══════════════════════════╣");
+                System.out.println("  ║  Score: " + String.format("%-16s", score) + "║");
+                System.out.println("  ║  Level: " + String.format("%-16s", level) + "║");
+                System.out.println("  ║  Lines: " + String.format("%-16s", rowCount) + "║");
+                System.out.println("  ╠══════════════════════════╣");
+                System.out.println("  ║  [R] Restart             ║");
+                System.out.println("  ║  [Q] Quit                ║");
+                System.out.println("  ╚══════════════════════════╝");
+                System.out.println();
+                System.out.print("  Your choice: ");
+
+                // Ждём ввода
+                int c;
+                while ((c = reader.read(1)) < 0) {
+                    Thread.sleep(20);
                 }
 
-                DrawBoard(gameboard);
-                HandleInput();
+                char choice = Character.toLowerCase((char) c);
 
-                if (now - lastDropTime >= drop_interval) {
-                    MoveDown(gameboard);
-
-                    int delRowCount = DelRow(gameboard);
-                    rowCount += delRowCount;
-                    switch (delRowCount) {
-                        case 1 -> score += 100*level;
-                        case 2 -> score += 300*level;
-                        case 3 -> score += 500*level;
-                        case 4 -> score += 800*level;
-                    }
-                    if (rowCount / 10 != level) {
-                        level += 1;
-                    }
-
-                    if (IsBoardFree(gameboard)) {
-                        SpawnBlock(gameboard);
-                    }
-
-                    if (IsLose(gameboard)) {
-                        System.exit(0);
-                    }
-
-                    lastDropTime = now;
+                if (choice == 'r' || choice == 'к') {
+                    continue;
+                } else if (choice == 'q' || choice == 'й') {
+                    break;
                 }
-
-                Thread.sleep(frame_interval);
             }
         } catch (Exception e) {
             e.printStackTrace();
-        }
-        finally {
+        } finally {
             terminal.puts(InfoCmp.Capability.cursor_visible);
+            try { terminal.close(); } catch (Exception ignored) {}
         }
     }
 
