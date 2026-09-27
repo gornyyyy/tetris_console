@@ -1,25 +1,73 @@
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 import java.util.Random;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.NonBlockingReader;
+import org.jline.utils.InfoCmp;
 
 public class Main {
 
     int rows = 20;
     int col = 10;
     int score = 0;
+    int rowCount = 0;
+    int level = 1;
+    int currentType;
+    int nextType;
     Random random = new Random();
     int[][] gameboard = new int[rows][col];
     // 3 - это низ, 2 - приземлившаяся фигурка, 1 - летящая фигурка
 
-    long drop_interval = 500;
-    long frame_interval = 15;
-
     Terminal terminal;
     NonBlockingReader reader;
+
+    private static final String RESET = "\u001B[0m";
+    private static final String GREEN = "\u001B[32m";
+    private static final String CYAN = "\u001B[46m";
+    private static final String WHITE = "\u001B[47m";
+    private static final String GRAY = "\u001B[100m";
+    private static final String BG_HIGHLIGHT = "\u001B[48;5;236m";
+    private static final String DARK_GRAY = "\u001B[90m";
+
+    private static final String[] BLOCK_COLORS = {
+            "\u001B[46m", // голубой (cyan)
+            "\u001B[43m", // жёлтый
+            "\u001B[45m", // маджента
+            "\u001B[42m", // зелёный
+            "\u001B[41m", // красный
+            "\u001B[44m", // синий
+            "\u001B[47m"  // белый
+    };
+
+    private static final int[][][] BLOCKS = {
+            {
+                    {1, 1, 1, 1}
+            },
+            {
+                    {1, 1},
+                    {1, 1}
+            },
+            {
+                    {0, 1, 0},
+                    {1, 1, 1}
+            },
+            {
+                    {0, 1, 1},
+                    {1, 1, 0}
+            },
+            {
+                    {1, 1, 0},
+                    {0, 1, 1}
+            },
+            {
+                    {1, 0, 0},
+                    {1, 1, 1}
+            },
+            {
+                    {0, 0, 1},
+                    {1, 1, 1}
+            }
+    };
+
 
     void FillBoard(int[][] board) {
         for (int i = 0; i < col; i++) {
@@ -28,69 +76,92 @@ public class Main {
         SpawnBlock(board);
     }
 
-    void DrawScore(int score) {
+    void DrawScore(int score, int level) {
         System.out.print("\033[1;1H");
-        System.out.print("Score: " + score + "           ");
+        System.out.printf("%sScore: %-6d Level: %-4d%s", GREEN, score, level, RESET);
     }
 
     void DrawBoard(int[][] board) {
-
         System.out.print("\033[3;1H");
+
+        boolean[] activeCols = new boolean[col];
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < col; j++) {
+                if (board[i][j] == 1) {
+                    activeCols[j] = true;
+                }
+            }
+        }
+
+        String activeColor = BLOCK_COLORS[currentType - 1];
 
         for (int i = 0; i < rows - 1; i++) {
             for (int j = 0; j < col; j++) {
                 if (board[i][j] == 3) {
-                    System.out.print("=" + " ");
+                    System.out.print(WHITE + "   " + RESET);
                 } else if (board[i][j] == 2) {
-                    System.out.print("*" + " ");
+                    System.out.print(GRAY + "   " + RESET);
+                } else if (board[i][j] == 1) {
+                    System.out.print(activeColor + "   " + RESET);
                 } else {
-                    System.out.print(board[i][j] == 1 ? "#" + " " : " " + " ");
+                    if (activeCols[j]) {
+                        System.out.print(BG_HIGHLIGHT + " · " + RESET);
+                    } else {
+                        System.out.print(DARK_GRAY + " · " + RESET);
+                    }
                 }
             }
             System.out.println();
         }
+
+        DrawNextBlock();
     }
 
     void SpawnBlock(int[][] board) {
-        int seed = random.nextInt(1, 6);
+        if (nextType == 0) {
+            nextType = random.nextInt(1, 8);
+        }
 
-        switch (seed) {
-            case 1:
-                board[0][col - 4] = 1;
-                board[1][col - 4] = 1;
-                board[1][col - 3] = 1;
-                board[0][col - 3] = 1;
-                break;
-            case 2:
-                board[0][col - 4] = 1;
-                board[0][col - 3] = 1;
-                board[0][col - 5] = 1;
-                board[0][col - 6] = 1;
-                break;
-            case 3:
-                board[0][col - 4] = 1;
-                board[0][col - 5] = 1;
-                board[0][col - 6] = 1;
-                board[1][col - 6] = 1;
-                break;
-            case 4:
-                board[0][col - 4] = 1;
-                board[0][col - 5] = 1;
-                board[0][col - 6] = 1;
-                board[1][col - 4] = 1;
-                break;
-            case 5:
-                board[0][col - 4] = 1;
-                board[0][col - 5] = 1;
-                board[1][col - 5] = 1;
-                board[1][col - 6] = 1;
-                break;
-            case 6:
-                board[1][col - 4] = 1;
-                board[1][col - 5] = 1;
-                board[0][col - 5] = 1;
-                board[0][col - 6] = 1;
-                break;
+        currentType = nextType;
+        nextType = random.nextInt(1,8);
+
+        int[][] shape = BLOCKS[currentType - 1];
+        int startY = 0;
+        int startX = col / 2 - shape[0].length / 2;
+
+        for (int i = 0; i < shape.length; i++) {
+            for (int j = 0; j < shape[i].length; j++) {
+                if (shape[i][j] == 1) {
+                    board[startY + i][startX + j] = 1;
+                }
+            }
+        }
+    }
+
+    void DrawNextBlock() {
+        int[][] shape = BLOCKS[nextType - 1];
+
+        int startRow = 4;
+        int startCol = col * 3 + 3;
+
+        System.out.print("\033[" + startRow + ";" + startCol + "H");
+        System.out.print("Next:           ");
+
+        for (int i = 0; i < 4; i++) {
+            System.out.print("\033[" + (startRow + 2 + i) + ";" + startCol + "H");
+            System.out.print("            ");
+        }
+
+        for (int i = 0; i < shape.length; i++) {
+            System.out.print("\033[" + (startRow + 2 + i) + ";" + startCol + "H");
+
+            for (int j = 0; j < shape[i].length; j++) {
+                if (shape[i][j] == 1) {
+                    System.out.print(CYAN + "   " + RESET);
+                } else {
+                    System.out.print("   ");
+                }
+            }
         }
     }
 
@@ -211,78 +282,99 @@ public class Main {
         }
     }
 
+    int[][] transpose(int[][] m) {
+        int r = m.length;
+        int c = m[0].length;
+        int[][] t = new int[c][r];
+        for (int i = 0; i < r; i++) {
+            for (int j = 0; j < c; j++) {
+                t[j][i] = m[i][j];
+            }
+        }
+        return t;
+    }
+
+    int[][] rotateCW(int[][] m) {
+        int[][] t = transpose(m);
+        int r = t.length;
+        int c = t[0].length;
+        int[][] result = new int[r][c];
+        for (int i = 0; i < r; i++) {
+            for (int j = 0; j < c; j++) {
+                result[i][j] = t[i][c - 1 - j];
+            }
+        }
+        return result;
+    }
+
     void Rotate(int[][] board) {
-        List<int[]> cells = new ArrayList<>();
+        int minY = Integer.MAX_VALUE, minX = Integer.MAX_VALUE;
+        int maxY = -1, maxX = -1;
         for (int y = 0; y < rows; y++) {
             for (int x = 0; x < col; x++) {
                 if (board[y][x] == 1) {
-                    cells.add(new int[]{y, x});
+                    if (y < minY) minY = y;
+                    if (x < minX) minX = x;
+                    if (y > maxY) maxY = y;
+                    if (x > maxX) maxX = x;
                 }
             }
         }
 
-        if (cells.size() < 2) return;
+        if (maxY == -1) return;
 
-        int minYBefore = Integer.MAX_VALUE;
-        for (int[] c : cells) {
-            if (c[0] < minYBefore) minYBefore = c[0];
-        }
+        int h = maxY - minY + 1;
+        int w = maxX - minX + 1;
 
-        int centerY = cells.get(1)[0];
-        int centerX = cells.get(1)[1];
-
-        List<int[]> rotated = new ArrayList<>();
-        for (int[] c : cells) {
-            int dy = c[0] - centerY;
-            int dx = c[1] - centerX;
-
-            int newY = centerY + dx;
-            int newX = centerX - dy;
-            rotated.add(new int[]{newY, newX});
-        }
-
-        int minYAfter = Integer.MAX_VALUE;
-        for (int[] c : rotated) {
-            if (c[0] < minYAfter) minYAfter = c[0];
-        }
-
-        if (minYAfter < 0) {
-            int shift = -minYAfter;
-            for (int[] c : rotated) {
-                c[0] += shift;
+        int[][] shape = new int[h][w];
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                if (board[y][x] == 1) {
+                    shape[y - minY][x - minX] = 1;
+                }
             }
         }
 
-        int[] kicks = {0, 1, -1, 2, -2};
+        int[][] rotated = rotateCW(shape);
 
-        for (int kick : kicks) {
+        int newH = rotated.length;
+        int newW = rotated[0].length;
+
+        int[][] kicks = {{0, 0}, {0, 1}, {0, -1}, {1, 0}, {-1, 0}};
+
+        for (int[] kick : kicks) {
+            int baseY = minY + kick[0];
+            int baseX = minX + kick[1];
+
             boolean valid = true;
 
-            for (int[] c : rotated) {
-                int y = c[0];
-                int nx = c[1] + kick;
+            for (int i = 0; i < newH; i++) {
+                for (int j = 0; j < newW; j++) {
+                    if (rotated[i][j] == 0) continue;
 
-                if (y < 0 || y >= rows || nx < 0 || nx >= col
-                        || board[y][nx] == 2 || board[y][nx] == 3) {
-                    valid = false;
-                    break;
+                    int y = baseY + i;
+                    int x = baseX + j;
+
+                    if (y < 0 || y >= rows || x < 0 || x >= col) { valid = false; break; }
+                    if (board[y][x] == 2 || board[y][x] == 3) { valid = false; break; }
                 }
+                if (!valid) break;
             }
 
             if (!valid) continue;
 
-            for (int[] c : cells) {
-                if (board[c[0]][c[1]] == 1) {
-                    board[c[0]][c[1]] = 0;
+            for (int y = 0; y < rows; y++) {
+                for (int x = 0; x < col; x++) {
+                    if (board[y][x] == 1) board[y][x] = 0;
                 }
             }
 
-            for (int[] c : rotated) {
-                board[c[0]][c[1] + kick] = 1;
-            }
-
-            if (minYAfter < minYBefore) {
-                MoveDown(board);
+            for (int i = 0; i < newH; i++) {
+                for (int j = 0; j < newW; j++) {
+                    if (rotated[i][j] == 1) {
+                        board[baseY + i][baseX + j] = 1;
+                    }
+                }
             }
 
             return;
@@ -331,7 +423,12 @@ public class Main {
         try {
             terminal = TerminalBuilder.builder().system(true).build();
             terminal.enterRawMode();
+            terminal.puts(InfoCmp.Capability.cursor_invisible);
             reader = terminal.reader();
+
+            long drop_interval = 500;
+            long frame_interval = 15;
+
             int lastScore = -1;
             long lastDropTime = System.currentTimeMillis();
 
@@ -341,7 +438,7 @@ public class Main {
                 long now = System.currentTimeMillis();
 
                 if (score != lastScore) {
-                    DrawScore(score);
+                    DrawScore(score, level);
                     lastScore = score;
                 }
 
@@ -350,9 +447,19 @@ public class Main {
 
                 if (now - lastDropTime >= drop_interval) {
                     MoveDown(gameboard);
+
                     int delRowCount = DelRow(gameboard);
-                    score += delRowCount*delRowCount*10;
-                    
+                    rowCount += delRowCount;
+                    switch (delRowCount) {
+                        case 1 -> score += 100*level;
+                        case 2 -> score += 300*level;
+                        case 3 -> score += 500*level;
+                        case 4 -> score += 800*level;
+                    }
+                    if (rowCount / 10 != level) {
+                        level += 1;
+                    }
+
                     if (IsBoardFree(gameboard)) {
                         SpawnBlock(gameboard);
                     }
@@ -368,6 +475,9 @@ public class Main {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+        finally {
+            terminal.puts(InfoCmp.Capability.cursor_visible);
         }
     }
 
