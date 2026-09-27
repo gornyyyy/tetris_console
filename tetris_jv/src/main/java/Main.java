@@ -10,6 +10,7 @@ public class Main {
 
     int rows = 20;
     int col = 10;
+    int score = 0;
     Random random = new Random();
     int[][] gameboard = new int[rows][col];
     // 3 - это низ, 2 - приземлившаяся фигурка, 1 - летящая фигурка
@@ -27,9 +28,14 @@ public class Main {
         SpawnBlock(board);
     }
 
+    void DrawScore(int score) {
+        System.out.print("\033[1;1H");
+        System.out.print("Score: " + score + "           ");
+    }
+
     void DrawBoard(int[][] board) {
 
-        System.out.print("\033[H\033[2J");
+        System.out.print("\033[3;1H");
 
         for (int i = 0; i < rows - 1; i++) {
             for (int j = 0; j < col; j++) {
@@ -240,6 +246,13 @@ public class Main {
             if (c[0] < minYAfter) minYAfter = c[0];
         }
 
+        if (minYAfter < 0) {
+            int shift = -minYAfter;
+            for (int[] c : rotated) {
+                c[0] += shift;
+            }
+        }
+
         int[] kicks = {0, 1, -1, 2, -2};
 
         for (int kick : kicks) {
@@ -285,8 +298,9 @@ public class Main {
         return false;
     }
 
-    void DelRow(int[][] board) {
+    int DelRow(int[][] board) {
 
+        int delRows = 0;
         for (int i = rows -2; i >= 0; i--) {
             boolean fullRow = true;
             for (int j = 0; j < col; j++) {
@@ -307,9 +321,10 @@ public class Main {
             for (int j = 0; j < col; j++) {
                 board[0][j] = 0;
             }
-
+            delRows++;
             i++;
         }
+        return delRows;
     }
 
     void StartGame() {
@@ -317,25 +332,32 @@ public class Main {
             terminal = TerminalBuilder.builder().system(true).build();
             terminal.enterRawMode();
             reader = terminal.reader();
+            int lastScore = -1;
             long lastDropTime = System.currentTimeMillis();
 
+            System.out.print("\033[H\033[2J");
             FillBoard(gameboard);
             while (true) {
                 long now = System.currentTimeMillis();
+
+                if (score != lastScore) {
+                    DrawScore(score);
+                    lastScore = score;
+                }
 
                 DrawBoard(gameboard);
                 HandleInput();
 
                 if (now - lastDropTime >= drop_interval) {
                     MoveDown(gameboard);
-                    DelRow(gameboard);
-
+                    int delRowCount = DelRow(gameboard);
+                    score += delRowCount*delRowCount*10;
+                    
                     if (IsBoardFree(gameboard)) {
                         SpawnBlock(gameboard);
                     }
 
                     if (IsLose(gameboard)) {
-                        System.out.println("Lose");
                         System.exit(0);
                     }
 
@@ -351,6 +373,6 @@ public class Main {
 
     public static void main(String[] args) {
         new Main().StartGame();
-
+        System.out.println("Lose");
     }
 }
